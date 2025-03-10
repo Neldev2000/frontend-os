@@ -1,36 +1,93 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Process Scheduler Simulator - Frontend
+
+A minimalist, UX-focused dashboard for visualizing and analyzing CPU scheduling algorithms.
+
+## Features
+
+- Interactive visualization of CPU scheduling algorithms
+- Real-time updates of process states and statistics
+- Performance comparison between different algorithms
+- Configurable process generation and algorithm parameters
+- Responsive design for various screen sizes
+
+## Supported Algorithms
+
+- **Non-preemptive algorithms**:
+  - First-Come, First-Served (FCFS)
+  - Shortest Job First (SJF)
+  - Priority Scheduling
+  - Random Selection
+
+- **Preemptive algorithms**:
+  - Shortest Remaining Time First (SRTF)
+  - Round Robin (RR)
+  - Priority Scheduling with Preemption
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- Node.js (18.x or higher recommended)
+- pnpm package manager
+- Backend server running at `http://localhost:8000`
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Installation
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. Clone the repository:
+   ```bash
+   git clone <repository-url>
+   cd process-scheduler-frontend
+   ```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+2. Install dependencies:
+   ```bash
+   pnpm install
+   ```
 
-## Learn More
+3. Start the development server:
+   ```bash
+   pnpm dev
+   ```
 
-To learn more about Next.js, take a look at the following resources:
+4. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Usage
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. **Configuration Tab**:
+   - Select a scheduling algorithm
+   - Configure algorithm parameters (e.g., time quantum for Round Robin)
+   - Generate random processes or create them manually
+   - Set simulation speed
 
-## Deploy on Vercel
+2. **Simulation Tab**:
+   - View real-time visualization of processes in different states
+   - Monitor CPU and ready queue
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+3. **Statistics Tab**:
+   - View performance metrics of the current simulation
+   - Analyze CPU utilization, waiting time, turnaround time, etc.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+4. **Comparison Tab**:
+   - Compare performance metrics of different algorithms
+   - Visualize differences through charts
+
+## Backend Integration
+
+The frontend communicates with a backend server providing REST APIs and WebSocket for real-time updates. Ensure the backend is running at `http://localhost:8000`.
+
+For more details on backend integration, see [FRONTEND_INTEGRATION.md](FRONTEND_INTEGRATION.md).
+
+## Technologies Used
+
+- Next.js
+- React
+- TypeScript
+- Zustand (State Management)
+- shadcn/ui (Component Library)
+- Recharts (Visualization Library)
+- Socket.io-client (Real-time Communication)
+- Tailwind CSS (Styling)
+
+## License
+
+This project is licensed under the MIT License.
