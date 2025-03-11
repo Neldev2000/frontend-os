@@ -1,4 +1,5 @@
-const API_URL = 'http://localhost:8000';
+// Use the special WSL2 localhost forwarding that Windows can access
+const API_URL = 'http://wsl.localhost:8000';
 
 // Process interface
 export interface Process {
@@ -124,17 +125,35 @@ export const runSimulation = async (
   config: SimulationConfig = {}
 ) => {
   try {
+    // Create a simple representation of each process with only the essential properties
+    // This prevents circular references that cause JSON.stringify to fail
+    const sanitizedProcesses = processes.map(p => ({
+      id: p.id,
+      name: p.name,
+      arrivalTime: p.arrivalTime,
+      burstTime: p.burstTime,
+      ioBurstTime: p.ioBurstTime,
+      priority: p.priority
+      // Exclude any computed or reference properties
+    }));
+
     const response = await fetch(`${API_URL}/api/scheduler/simulate`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         algorithm,
-        processes,
+        processes: sanitizedProcesses,
         config,
-      }),
+      })
     });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Server responded with error:', response.status, errorText);
+      throw new Error(`Server error: ${response.status} - ${errorText || 'No details provided'}`);
+    }
     
     const data = await response.json();
     
@@ -144,6 +163,12 @@ export const runSimulation = async (
     throw new Error(data.message || 'Failed to run simulation');
   } catch (error) {
     console.error('Error running simulation:', error);
+    
+    // Provide a more useful error message for network errors
+    if (error instanceof TypeError && error.message === 'Failed to fetch') {
+      throw new Error(`Network error: Unable to connect to the backend server at ${API_URL}. Please check that the server is running.`);
+    }
+    
     throw error;
   }
 }; 

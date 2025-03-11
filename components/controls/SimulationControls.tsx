@@ -34,48 +34,53 @@ export function SimulationControls() {
   
   // Initialize socket connection
   useEffect(() => {
-    if (!socketInitialized) {
-      const socket = initializeSocket(
-        // On simulation step
-        (data) => {
-          updateSimulationStep(data);
-        },
-        // On simulation completed
-        (data) => {
-          setStatus('completed');
-          
-          // Save result to the results store
-          addResult({
-            id: generateId(),
-            algorithm: simulation.algorithm,
-            processes: data.results || [],
-            statistics: data.statistics || {},
-            timestamp: Date.now()
-          });
-        },
-        // On simulation error
-        (err) => {
-          console.error('Simulation error:', err);
-          setError(err.message || 'An error occurred during simulation');
-          setStatus('idle');
-        },
-        // On simulation state change
-        (state) => {
-          setStatus(state as any);
-        }
-      );
-      
-      setSocketInitialized(true);
-      
-      return () => {
-        cleanupSocket();
-      };
-    }
-  }, [socketInitialized, updateSimulationStep, setStatus, addResult, simulation.algorithm]);
+    // Ensure the socket is initialized 
+    console.log('Initializing socket connection');
+    
+    const socket = initializeSocket(
+      // On simulation step
+      (data) => {
+        updateSimulationStep(data);
+      },
+      // On simulation completed
+      (data) => {
+        setStatus('completed');
+        
+        // Save result to the results store
+        console.log('Saving result to the results store');
+        console.log('Data:', data);
+        addResult({
+          id: generateId(),
+          algorithm: simulation.algorithm,
+          processes: data.results || [],
+          statistics: data.statistics || {},
+          timestamp: Date.now()
+        });
+      },
+      // On simulation error
+      (err) => {
+        console.error('Simulation error:', err);
+        setError(err.message || 'An error occurred during simulation');
+        setStatus('idle');
+      },
+      // On simulation state change
+      (state) => {
+        setStatus(state as any);
+      }
+    );
+    
+    setSocketInitialized(true);
+    
+    return () => {
+      console.log('Cleaning up socket connection');
+      cleanupSocket();
+    };
+  }, []);  // Empty dependency array to run only once
   
   // Run one-time simulation
   const handleRunSimulation = async () => {
     try {
+      console.log('Running one-time simulation');
       setLoading(true);
       setError(null);
       
@@ -93,6 +98,8 @@ export function SimulationControls() {
       });
       
       // Add to results store
+      console.log('Adding result to the results store');
+      console.log('Result:', result);
       addResult({
         id: generateId(),
         algorithm: simulation.algorithm,
@@ -114,15 +121,29 @@ export function SimulationControls() {
   const handleStartRealTimeSimulation = () => {
     try {
       setError(null);
+      
+      if (!socketInitialized) {
+        console.error('Socket not initialized yet');
+        setError('Socket connection not established. Please refresh the page and try again.');
+        return;
+      }
+      
+      console.log('Starting real-time simulation with:', {
+        algorithm: simulation.algorithm,
+        processes: simulation.processes.length,
+        simSpeed,
+        config: simulation.algorithmConfig
+      });
+      
       startSimulation(
         simulation.algorithm,
         simulation.processes,
         simSpeed,
         simulation.algorithmConfig
       );
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error starting real-time simulation:', err);
-      setError('Failed to start real-time simulation. Please try again.');
+      setError(err?.message || 'Failed to start real-time simulation. Please try again.');
     }
   };
   
@@ -134,8 +155,14 @@ export function SimulationControls() {
   };
   
   const handleReset = () => {
-    resetSimulation();
-    resetSimulationState();
+    try {
+      resetSimulation();
+      resetSimulationState();
+    } catch (error) {
+      console.error('Error resetting simulation:', error);
+      // Still reset the UI state even if socket reset fails
+      resetSimulationState();
+    }
   };
   
   return (

@@ -13,18 +13,38 @@ export const initializeSocket = (
   onSimulationState: (state: string) => void
 ) => {
   if (socket) {
+    console.log('Disconnecting existing socket');
     socket.disconnect();
   }
 
-  socket = io(API_URL);
+  console.log('Connecting to socket server at:', API_URL);
+  try {
+    socket = io(API_URL, {
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+    });
 
-  // Setup event listeners
-  socket.on('simulation-step', onSimulationStep);
-  socket.on('simulation-completed', onSimulationCompleted);
-  socket.on('simulation-error', onSimulationError);
-  socket.on('simulation-state', onSimulationState);
+    // Setup event listeners
+    socket.on('connect', () => {
+      console.log('Socket connected successfully with ID:', socket?.id);
+    });
+    
+    socket.on('connect_error', (err) => {
+      console.error('Socket connection error:', err);
+      onSimulationError({message: `Failed to connect to simulation server: ${err.message}`});
+    });
+    
+    socket.on('simulation-step', onSimulationStep);
+    socket.on('simulation-completed', onSimulationCompleted);
+    socket.on('simulation-error', onSimulationError);
+    socket.on('simulation-state', onSimulationState);
 
-  return socket;
+    return socket;
+  } catch (err) {
+    console.error('Error initializing socket:', err);
+    throw new Error('Failed to initialize socket connection');
+  }
 };
 
 // Start a real-time simulation

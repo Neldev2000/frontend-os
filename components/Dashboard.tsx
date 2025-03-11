@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlgorithmSelector } from "@/components/controls/AlgorithmSelector";
@@ -8,11 +9,22 @@ import { SimulationControls } from "@/components/controls/SimulationControls";
 import { ProcessVisualization } from "@/components/visualization/ProcessVisualization";
 import { StatisticsPanel } from "@/components/visualization/StatisticsPanel";
 import { AlgorithmComparisonChart } from "@/components/visualization/AlgorithmComparisonChart";
+import { useSimulationStore } from "@/lib/store/simulation-state";
 
 export function Dashboard() {
+  const [activeTab, setActiveTab] = useState<string>("configuration");
+  const { simulation } = useSimulationStore();
+
+  // Switch to simulation tab when simulation is running or paused
+  useEffect(() => {
+    if (simulation.status === 'running' || simulation.status === 'paused') {
+      setActiveTab('simulation');
+    }
+  }, [simulation.status]);
+
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="configuration" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="grid w-full grid-cols-4 max-w-2xl">
           <TabsTrigger value="configuration">Configuration</TabsTrigger>
           <TabsTrigger value="simulation">Simulation</TabsTrigger>
@@ -45,9 +57,18 @@ export function Dashboard() {
               </CardHeader>
               <CardContent className="h-[120px] flex items-center justify-center">
                 <div className="text-center">
-                  <p className="text-muted-foreground">
-                    No process currently running
-                  </p>
+                  {simulation.queues.runningProcess ? (
+                    <div>
+                      <p className="font-medium">{simulation.queues.runningProcess.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Remaining time: {simulation.queues.runningProcess.remainingTime}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground">
+                      No process currently running
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>

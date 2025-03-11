@@ -30,17 +30,29 @@ export const generateRandomColor = (): string => {
 
 // Prepare data for algorithm comparison chart
 export const prepareComparisonData = (results: AlgorithmResult[]) => {
-  if (!results.length) return [];
+  if (!results || !Array.isArray(results) || results.length === 0) return [];
   
-  // Extract algorithm names and statistics
-  return results.map(result => ({
-    algorithm: result.algorithm,
-    cpuUtilization: parseFloat(result.statistics.cpuUtilization),
-    avgWaitingTime: parseFloat(result.statistics.avgWaitingTime),
-    avgTurnaroundTime: parseFloat(result.statistics.avgTurnaroundTime),
-    avgResponseTime: parseFloat(result.statistics.avgResponseTime),
-    throughput: parseFloat(result.statistics.throughput)
-  }));
+  try {
+    // Extract algorithm names and statistics
+    return results.map(result => {
+      if (!result || !result.statistics) {
+        console.error('Invalid result data:', result);
+        return null;
+      }
+      
+      return {
+        algorithm: result.algorithm || 'Unknown',
+        cpuUtilization: parseFloat(result.statistics.cpuUtilization || '0'),
+        avgWaitingTime: parseFloat(result.statistics.avgWaitingTime || '0'),
+        avgTurnaroundTime: parseFloat(result.statistics.avgTurnaroundTime || '0'),
+        avgResponseTime: parseFloat(result.statistics.avgResponseTime || '0'),
+        throughput: parseFloat(result.statistics.throughput || '0')
+      };
+    }).filter(item => item !== null) as any[]; // Filter out null items
+  } catch (error) {
+    console.error('Error preparing comparison data:', error);
+    return [];
+  }
 };
 
 // Format algorithms for select options

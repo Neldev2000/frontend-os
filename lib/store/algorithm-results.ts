@@ -55,10 +55,13 @@ export const useAlgorithmResultsStore = create<AlgorithmResultsState>()((set, ge
     const existingResultIndex = state.results.findIndex(r => r.algorithm === result.algorithm);
     
     if (existingResultIndex !== -1) {
+      // Create a new array with the same elements but replace the existing result
+      // This ensures a new reference is created, triggering re-renders
       const newResults = [...state.results];
       newResults[existingResultIndex] = result;
       return { results: newResults };
     } else {
+      // Add new result to a new array reference
       return { results: [...state.results, result] };
     }
   }),
