@@ -73,7 +73,22 @@ A minimalist, UX-focused dashboard for visualizing and analyzing CPU scheduling 
 
 ## Backend Integration
 
-The frontend communicates with a backend server providing REST APIs and WebSocket for real-time updates. Ensure the backend is running at `http://localhost:8000`.
+The frontend communicates with a backend server providing REST APIs and WebSocket for real-time updates. By default, it connects to `http://localhost:8000`.
+
+### Environment Configuration
+
+The API URL can be configured through environment variables:
+
+1. For local development, create a `.env.local` file in the root directory:
+   ```bash
+   NEXT_PUBLIC_API_URL=http://localhost:8000
+   # Or for WSL:
+   # NEXT_PUBLIC_API_URL=http://wsl.localhost:8000
+   ```
+
+2. For production deployment, either:
+   - Create a `.env.production` file, or
+   - Set the environment variable in your deployment platform
 
 For more details on backend integration, see [FRONTEND_INTEGRATION.md](FRONTEND_INTEGRATION.md).
 

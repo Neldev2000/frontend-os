@@ -1,5 +1,5 @@
-// Use the special WSL2 localhost forwarding that Windows can access
-const API_URL = 'http://wsl.localhost:8000';
+// Use environment variable with fallback
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://wsl.localhost:8000';
 
 // Process interface
 export interface Process {
