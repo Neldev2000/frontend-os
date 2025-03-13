@@ -7,14 +7,12 @@ import { Slider } from '@/components/ui/slider';
 import { useSimulationStore } from '@/lib/store/simulation-state';
 import { useAlgorithmResultsStore } from '@/lib/store/algorithm-results';
 import { 
-  initializeSocket, 
   startSimulation, 
   pauseSimulation, 
   resumeSimulation, 
   stepSimulation, 
   resetSimulation,
-  changeTickSpeed,
-  cleanupSocket
+  changeTickSpeed
 } from '@/lib/socket';
 import { runSimulation } from '@/lib/api';
 import { generateId } from '@/lib/utils';
@@ -30,9 +28,12 @@ import {
   Clock
 } from 'lucide-react';
 
-export function SimulationControls() {
+interface SimulationControlsProps {
+  socketInitialized: boolean;
+}
+
+export function SimulationControls({ socketInitialized }: SimulationControlsProps) {
   const [simSpeed, setSimSpeed] = useState<number>(1000); // ms per step
-  const [socketInitialized, setSocketInitialized] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -44,59 +45,6 @@ export function SimulationControls() {
   } = useSimulationStore();
   
   const { addResult } = useAlgorithmResultsStore();
-  
-  // Initialize socket connection
-  useEffect(() => {
-    // Ensure the socket is initialized 
-    console.log('Initializing socket connection');
-    
-    const socket = initializeSocket(
-      // On simulation step
-      (data) => {
-        updateSimulationStep(data);
-      },
-      // On simulation completed
-      (data) => {
-        setStatus('completed');
-        
-        // Save result to the results store
-        console.log('Saving result to the results store');
-        console.log('Data:', data);
-        addResult({
-          id: generateId(),
-          algorithm: simulation.algorithm,
-          processes: data.results || [],
-          statistics: data.statistics || {},
-          timestamp: Date.now()
-        });
-      },
-      // On simulation error
-      (err) => {
-        console.error('Simulation error:', err);
-        setError(err.message || 'An error occurred during simulation');
-        setStatus('idle');
-      },
-      // On simulation state change
-      (stateData) => {
-        if (typeof stateData === 'object' && 'state' in stateData) {
-          setStatus(stateData.state as any);
-          // If state includes tickSpeed, update the local simSpeed
-          if ('tickSpeed' in stateData && typeof stateData.tickSpeed === 'number') {
-            setSimSpeed(stateData.tickSpeed);
-          }
-        } else if (typeof stateData === 'string') {
-          setStatus(stateData as any);
-        }
-      }
-    );
-    
-    setSocketInitialized(true);
-    
-    return () => {
-      console.log('Cleaning up socket connection');
-      cleanupSocket();
-    };
-  }, []);  // Empty dependency array to run only once
   
   // Run one-time simulation
   const handleRunSimulation = async () => {

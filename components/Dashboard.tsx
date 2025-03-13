@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlgorithmSelector } from "@/components/controls/AlgorithmSelector";
@@ -10,10 +10,73 @@ import { ProcessVisualization } from "@/components/visualization/ProcessVisualiz
 import { StatisticsPanel } from "@/components/visualization/StatisticsPanel";
 import { AlgorithmComparisonChart } from "@/components/visualization/AlgorithmComparisonChart";
 import { useSimulationStore } from "@/lib/store/simulation-state";
+import { useAlgorithmResultsStore } from "@/lib/store/algorithm-results";
+import { 
+  initializeSocket, 
+  cleanupSocket
+} from "@/lib/socket";
+import { generateId } from "@/lib/utils";
 
 export function Dashboard() {
   const [activeTab, setActiveTab] = useState<string>("configuration");
-  const { simulation } = useSimulationStore();
+  const [socketInitialized, setSocketInitialized] = useState<boolean>(false);
+  const { simulation, updateSimulationStep, setStatus } = useSimulationStore();
+  const { addResult } = useAlgorithmResultsStore();
+  const algorithmRef = useRef(simulation.algorithm);
+
+  // Keep the algorithm reference updated
+  useEffect(() => {
+    algorithmRef.current = simulation.algorithm;
+  }, [simulation.algorithm]);
+
+  // Initialize socket connection once when the Dashboard mounts
+  useEffect(() => {
+    console.log('Initializing socket connection from Dashboard');
+    
+    const socket = initializeSocket(
+      // On simulation step
+      (data) => {
+        updateSimulationStep(data);
+      },
+      // On simulation completed
+      (data) => {
+        setStatus('completed');
+        
+        // Save result to the results store
+        console.log('Saving result to the results store');
+        console.log('Data:', data);
+        addResult({
+          id: generateId(),
+          algorithm: algorithmRef.current, // Use the ref instead of direct access
+          processes: data.results || [],
+          statistics: data.statistics || {},
+          timestamp: Date.now()
+        });
+      },
+      // On simulation error
+      (err) => {
+        console.error('Simulation error:', err);
+        setStatus('idle');
+      },
+      // On simulation state change
+      (stateData) => {
+        if (typeof stateData === 'object' && 'state' in stateData) {
+          setStatus(stateData.state as any);
+          // If state includes tickSpeed, update tickSpeed in simulation store
+          // (SimulationControls will read this from the store)
+        } else if (typeof stateData === 'string') {
+          setStatus(stateData as any);
+        }
+      }
+    );
+    
+    setSocketInitialized(true);
+    
+    return () => {
+      console.log('Cleaning up socket connection from Dashboard');
+      cleanupSocket();
+    };
+  }, []); // Empty dependency array - only run once
 
   // Switch to simulation tab when simulation is running or paused
   useEffect(() => {
@@ -36,7 +99,7 @@ export function Dashboard() {
         <TabsContent value="configuration" className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <AlgorithmSelector />
-            <SimulationControls />
+            <SimulationControls socketInitialized={socketInitialized} />
           </div>
           <ProcessGenerator />
         </TabsContent>
