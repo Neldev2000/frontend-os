@@ -16,34 +16,54 @@ import {
   PolarRadiusAxis,
   Radar,
   LineChart,
-  Line
+  Line,
+  ScatterChart, 
+  Scatter,
+  ZAxis,
+  Cell,
+  ReferenceArea,
+  ReferenceLine,
+  Treemap,
+  ComposedChart,
+  Area
 } from 'recharts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAlgorithmResultsStore } from '@/lib/store/algorithm-results';
 import { prepareComparisonData, generateRandomColor, getAlgorithmFullName } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface AlgorithmComparisonChartProps {
   metrics?: Array<{
     key: string;
     name: string;
     unit?: string;
+    description?: string;
   }>;
 }
 
 export function AlgorithmComparisonChart({
   metrics = [
-    { key: 'cpuUtilization', name: 'CPU Utilization', unit: '%' },
-    { key: 'avgWaitingTime', name: 'Avg Waiting Time', unit: 'ms' },
-    { key: 'avgTurnaroundTime', name: 'Avg Turnaround Time', unit: 'ms' },
-    { key: 'avgResponseTime', name: 'Avg Response Time', unit: 'ms' },
-    { key: 'throughput', name: 'Throughput', unit: 'proc/ms' },
+    { key: 'cpuUtilization', name: 'CPU Utilization', unit: '%', description: 'Percentage of time the CPU is actively processing' },
+    { key: 'avgWaitingTime', name: 'Avg Waiting Time', unit: 'ms', description: 'Average time processes spend in the ready queue' },
+    { key: 'avgTurnaroundTime', name: 'Avg Turnaround Time', unit: 'ms', description: 'Average time from process arrival to completion' },
+    { key: 'avgResponseTime', name: 'Avg Response Time', unit: 'ms', description: 'Average time from arrival to first CPU execution' },
+    { key: 'throughput', name: 'Throughput', unit: 'proc/ms', description: 'Number of processes completed per unit time' },
   ],
 }: AlgorithmComparisonChartProps) {
   const results = useAlgorithmResultsStore(state => state.results);
   const clearResults = useAlgorithmResultsStore(state => state.clearResults);
-  const [chartType, setChartType] = useState<'bar' | 'radar' | 'line'>('bar');
+  const [chartType, setChartType] = useState<'bar' | 'radar' | 'line' | 'scatter' | 'composed' | 'heatmap'>('bar');
+  const [primaryMetric, setPrimaryMetric] = useState<string>(metrics[0].key);
+  const [secondaryMetric, setSecondaryMetric] = useState<string>(metrics[1].key);
+  const [showInsights, setShowInsights] = useState<boolean>(true);
   
   // Enhanced debugging for results data
   useEffect(() => {
@@ -121,21 +141,33 @@ export function AlgorithmComparisonChart({
     ];
   }, []);
   
-  // Calculate normalized values for the radar chart (all values between 0-100)
+  // Prepare data with standardized/z-score normalized values for better comparisons
   const normalizedData = useMemo(() => {
     if (chartData.length === 0) return [];
     
-    // Find the maximum value for each metric to normalize
-    const maxValues: Record<string, number> = {};
+    // First calculate means and standard deviations for each metric
+    const means: Record<string, number> = {};
+    const stdDevs: Record<string, number> = {};
     
     metrics.forEach(metric => {
-      maxValues[metric.key] = Math.max(
-        ...chartData.map(item => (item as any)[metric.key] || 0),
-        0.001 // Prevent division by zero
-      );
+      const values = chartData.map(item => (item as any)[metric.key] || 0);
+      const sum = values.reduce((acc, val) => acc + val, 0);
+      const mean = sum / values.length;
+      means[metric.key] = mean;
+      
+      const squaredDiffs = values.map(val => Math.pow(val - mean, 2));
+      const variance = squaredDiffs.reduce((acc, val) => acc + val, 0) / values.length;
+      stdDevs[metric.key] = Math.sqrt(variance);
     });
     
-    // Normalize each value to 0-100 scale
+    // Handle zero standard deviation (all values are the same)
+    metrics.forEach(metric => {
+      if (stdDevs[metric.key] === 0) {
+        stdDevs[metric.key] = 1; // prevent division by zero
+      }
+    });
+    
+    // Normalize using z-score: (value - mean) / stdDev
     return chartData.map(item => {
       if (!item) return null;
       
@@ -146,11 +178,126 @@ export function AlgorithmComparisonChart({
       
       metrics.forEach(metric => {
         const value = (item as any)[metric.key] || 0;
-        normalized[metric.key] = (value / maxValues[metric.key]) * 100;
+        normalized[metric.key] = (value - means[metric.key]) / stdDevs[metric.key];
+        // Also keep the original value
+        normalized[`${metric.key}Original`] = value;
       });
       
       return normalized;
     }).filter(Boolean);
+  }, [chartData, metrics]);
+  
+  // For radar chart, we need values between 0-100
+  const radarData = useMemo(() => {
+    if (normalizedData.length === 0) return [];
+    
+    // Map normalized values to 0-100 scale
+    return normalizedData.map(item => {
+      if (!item) return null;
+      
+      const scaled: Record<string, any> = {
+        algorithm: item.algorithm,
+        algorithmName: item.algorithmName
+      };
+      
+      metrics.forEach(metric => {
+        // Convert z-scores to 0-100 scale (generally z-scores between -3 and 3)
+        // Map range [-3, 3] to [0, 100]
+        const zScore = item[metric.key];
+        const scaledValue = Math.max(0, Math.min(100, ((zScore + 3) / 6) * 100));
+        scaled[metric.key] = scaledValue;
+      });
+      
+      return scaled;
+    }).filter(Boolean);
+  }, [normalizedData, metrics]);
+  
+  // Calculate insights based on the data
+  const insights = useMemo(() => {
+    if (chartData.length < 2) return null;
+    
+    // Find the best algorithm for each metric
+    const bestAlgorithms: Record<string, { algorithm: string, value: number }> = {};
+    
+    metrics.forEach(metric => {
+      let bestAlgo = chartData[0];
+      let bestValue = (chartData[0] as any)[metric.key];
+      
+      // For waiting time, turnaround time, and response time, lower is better
+      // For CPU utilization and throughput, higher is better
+      const isLowerBetter = ['avgWaitingTime', 'avgTurnaroundTime', 'avgResponseTime'].includes(metric.key);
+      
+      chartData.forEach(algo => {
+        if (!algo) return;
+        
+        const value = (algo as any)[metric.key];
+        if (isLowerBetter) {
+          if (value < bestValue) {
+            bestValue = value;
+            bestAlgo = algo;
+          }
+        } else {
+          if (value > bestValue) {
+            bestValue = value;
+            bestAlgo = algo;
+          }
+        }
+      });
+      
+      if (!bestAlgo) return;
+      
+      bestAlgorithms[metric.key] = {
+        algorithm: bestAlgo.algorithmName,
+        value: bestValue
+      };
+    });
+    
+    // Calculate the overall best algorithm based on a weighted score
+    const weightedScores = chartData.map(algo => {
+      if (!algo) return null;
+      
+      let score = 0;
+      
+      metrics.forEach(metric => {
+        const value = (algo as any)[metric.key];
+        const isLowerBetter = ['avgWaitingTime', 'avgTurnaroundTime', 'avgResponseTime'].includes(metric.key);
+        
+        // Normalize the value (0 to 1 scale)
+        const allValues = chartData.map(a => (a as any)[metric.key]);
+        const minValue = Math.min(...allValues);
+        const maxValue = Math.max(...allValues);
+        const range = maxValue - minValue;
+        
+        // Avoid division by zero
+        if (range === 0) return;
+        
+        const normalizedValue = isLowerBetter 
+          ? 1 - ((value - minValue) / range) // Invert for metrics where lower is better
+          : (value - minValue) / range;
+        
+        // Add to weighted score (all metrics weighted equally for now)
+        score += normalizedValue;
+      });
+      
+      return {
+        algorithm: algo.algorithm,
+        algorithmName: algo.algorithmName,
+        score
+      };
+    }).filter(Boolean);
+    
+    // Sort to find overall best
+    weightedScores.sort((a, b) => {
+      if (!a || !b) return 0;
+      return b.score - a.score;
+    });
+    const overallBest = weightedScores.length > 0 ? weightedScores[0] : null;
+    
+    return {
+      bestAlgorithms,
+      overallBest,
+      weightedScores
+    };
   }, [chartData, metrics]);
   
   // Formatter function for handling different value types
@@ -179,11 +326,9 @@ export function AlgorithmComparisonChart({
               Once you run simulations with different algorithms, you'll see performance metrics compared here.
             </p>
             <ul className="text-sm list-disc pl-5 space-y-1 mt-2">
-              <li>CPU Utilization - How efficiently the CPU is used</li>
-              <li>Average Waiting Time - Mean time processes spend waiting</li>
-              <li>Average Turnaround Time - Mean time from arrival to completion</li>
-              <li>Average Response Time - Mean time from arrival to first execution</li>
-              <li>Throughput - Number of processes completed per unit time</li>
+              {metrics.map(metric => (
+                <li key={metric.key}>{metric.name} - {metric.description}</li>
+              ))}
             </ul>
           </div>
         </CardContent>
@@ -226,150 +371,99 @@ export function AlgorithmComparisonChart({
         </div>
       </CardHeader>
       <CardContent>
-        <Tabs defaultValue="bar" onValueChange={(value) => setChartType(value as any)}>
-          <TabsList className="mb-4">
-            <TabsTrigger value="bar">Bar Chart</TabsTrigger>
-            <TabsTrigger value="radar">Radar Chart</TabsTrigger>
-            <TabsTrigger value="line">Line Chart</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="bar" className="h-[400px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={chartData}
-                margin={{
-                  top: 20,
-                  right: 30,
-                  left: 20,
-                  bottom: 70,
-                }}
-              >
-                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                <XAxis 
-                  dataKey="algorithmName" 
-                  angle={-45} 
-                  textAnchor="end" 
-                  height={70}
-                  tick={{ fontSize: 12 }}
-                />
-                <YAxis />
-                <Tooltip
-                  formatter={(value: any, name) => {
-                    const metric = metrics.find(m => m.key === name);
-                    return [formatValue(value, metric?.unit || ''), metric?.name || name];
-                  }}
-                  labelFormatter={(label) => `Algorithm: ${label}`}
-                />
-                <Legend />
-                {metrics.map((metric, index) => (
-                  <Bar
-                    key={metric.key}
-                    dataKey={metric.key}
-                    name={metric.name}
-                    fill={colors[index % colors.length]}
-                    animationDuration={500}
-                  />
-                ))}
-              </BarChart>
-            </ResponsiveContainer>
-          </TabsContent>
-          
-          <TabsContent value="radar" className="h-[400px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <RadarChart 
-                cx="50%" 
-                cy="50%" 
-                outerRadius="70%" 
-                data={normalizedData}
-              >
-                <PolarGrid />
-                <PolarAngleAxis 
-                  dataKey="algorithmName"
-                  tick={{ fontSize: 12 }}
-                />
-                <PolarRadiusAxis angle={90} domain={[0, 100]} tickCount={5} />
-                <Tooltip
-                  formatter={(value: any, name) => {
-                    const metric = metrics.find(m => m.key === name);
-                    return [formatValue(value, '%'), metric?.name || name];
-                  }}
-                  labelFormatter={(label) => `Algorithm: ${label}`}
-                />
-                <Legend />
-                {metrics.map((metric, index) => (
-                  <Radar
-                    key={metric.key}
-                    name={metric.name}
-                    dataKey={metric.key}
-                    stroke={colors[index % colors.length]}
-                    fill={colors[index % colors.length]}
-                    fillOpacity={0.3}
-                  />
-                ))}
-              </RadarChart>
-            </ResponsiveContainer>
-          </TabsContent>
-          
-          <TabsContent value="line" className="h-[400px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={chartData}
-                margin={{
-                  top: 20,
-                  right: 30,
-                  left: 20,
-                  bottom: 70,
-                }}
-              >
-                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                <XAxis 
-                  dataKey="algorithmName" 
-                  angle={-45} 
-                  textAnchor="end" 
-                  height={70}
-                />
-                <YAxis />
-                <Tooltip
-                  formatter={(value: any, name) => {
-                    const metric = metrics.find(m => m.key === name);
-                    return [formatValue(value, metric?.unit || ''), metric?.name || name];
-                  }}
-                />
-                <Legend />
-                {metrics.map((metric, index) => (
-                  <Line
-                    key={metric.key}
-                    type="monotone"
-                    dataKey={metric.key}
-                    name={metric.name}
-                    stroke={colors[index % colors.length]}
-                    activeDot={{ r: 8 }}
-                    strokeWidth={2}
-                  />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-          </TabsContent>
-        </Tabs>
+        {/* Chart Controls */}
+       
+       
         
-        <div className="mt-4">
-          <h4 className="font-medium text-sm mb-2">Results Summary</h4>
+       
+        
+        {/* Results Summary with Enhanced Visualization */}
+        <div className="mt-8">
+          <h4 className="font-medium text-lg mb-4">Results Summary</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {chartData.filter(result => result !== null).map((result) => (
               <div 
                 key={result.algorithm} 
-                className="p-3 rounded-md border border-gray-200 dark:border-gray-800"
+                className="p-4 rounded-md border border-gray-200 dark:border-gray-800 relative overflow-hidden"
               >
-                <h5 className="font-medium">{result.algorithmName}</h5>
-                <ul className="text-sm">
-                  {metrics.map((metric) => (
-                    <li key={`${result.algorithm}-${metric.key}`} className="flex justify-between mt-1">
-                      <span className="text-muted-foreground">{metric.name}:</span>
-                      <span className="font-mono">
-                        {formatValue((result as any)[metric.key], metric.unit)}
-                      </span>
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent to-transparent opacity-10" 
+                     style={{ background: `linear-gradient(to right, ${colors[chartData.indexOf(result) % colors.length]}22, transparent)` }} />
+                
+                <h5 className="font-medium text-lg mb-2 flex items-center">
+                  <span 
+                    className="w-3 h-3 rounded-full mr-2" 
+                    style={{ backgroundColor: colors[chartData.indexOf(result) % colors.length] }}
+                  />
+                  {result.algorithmName}
+                </h5>
+                
+                <ul className="space-y-2">
+                  {metrics.map((metric) => {
+                    const value = (result as any)[metric.key];
+                    const allValues = chartData.map(r => (r as any)[metric.key]);
+                    const maxValue = Math.max(...allValues);
+                    const minValue = Math.min(...allValues);
+                    const range = maxValue - minValue;
+                    
+                    // For metrics where lower is better, we invert the percentage
+                    const isLowerBetter = ['avgWaitingTime', 'avgTurnaroundTime', 'avgResponseTime'].includes(metric.key);
+                    const percentage = range === 0 
+                      ? 50 // If all algorithms have the same value
+                      : isLowerBetter
+                        ? 100 - ((value - minValue) / range * 100)
+                        : ((value - minValue) / range * 100);
+                    
+                    // Determine color based on percentage (green for good, red for bad)
+                    const barColor = isLowerBetter
+                      ? `hsl(${percentage * 1.2}, 70%, 50%)`
+                      : `hsl(${percentage * 1.2}, 70%, 50%)`;
+                    
+                    return (
+                      <li key={`${result.algorithm}-${metric.key}`} className="flex flex-col">
+                        <div className="flex justify-between text-sm mb-1">
+                          <span className="text-muted-foreground">{metric.name}:</span>
+                          <span className="font-mono">
+                            {formatValue(value, metric.unit)}
+                          </span>
+                        </div>
+                        <div className="h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full rounded-full" 
+                            style={{ 
+                              width: `${percentage}%`, 
+                              backgroundColor: barColor
+                            }}
+                          />
+                        </div>
+                      </li>
+                    );
+                  })}
+                  
+                  {/* Overall score bar (only if we have multiple algorithms) */}
+                  {insights && insights.weightedScores && (
+                    <li className="pt-2 mt-2 border-t border-gray-100 dark:border-gray-800">
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-muted-foreground">Overall Score:</span>
+                        <span className="font-mono">
+                          {(() => {
+                            const score = insights.weightedScores.find(s => s && s.algorithm === result.algorithm);
+                            return formatValue(score ? (score.score / metrics.length * 100) : 0, '%');
+                          })()}
+                        </span>
+                      </div>
+                      <div className="h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full rounded-full bg-blue-500" 
+                          style={{ 
+                            width: (() => {
+                              const score = insights.weightedScores.find(s => s && s.algorithm === result.algorithm);
+                              return `${score ? (score.score / metrics.length * 100) : 0}%`;
+                            })()
+                          }}
+                        />
+                      </div>
                     </li>
-                  ))}
+                  )}
                 </ul>
               </div>
             ))}
