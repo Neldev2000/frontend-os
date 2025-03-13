@@ -59,6 +59,14 @@ export function SimulationControls({ socketInitialized }: SimulationControlsProp
         simulation.algorithmConfig
       );
       
+      console.log('Simulation completed, raw result:', result);
+      
+      if (!result || !result.results || !result.statistics) {
+        console.error('Invalid result received from simulation:', result);
+        setError('Received invalid simulation data. Check console for details.');
+        return;
+      }
+      
       // Update simulation with results
       updateSimulationStep({
         processes: result.results || [],
@@ -67,15 +75,25 @@ export function SimulationControls({ socketInitialized }: SimulationControlsProp
       });
       
       // Add to results store
-      console.log('Adding result to the results store');
-      console.log('Result:', result);
-      addResult({
+      console.log('Adding result to the algorithm results store');
+      
+      const resultToAdd = {
         id: generateId(),
         algorithm: simulation.algorithm,
-        processes: result.results || [],
+        processes: Array.isArray(result.results) ? result.results : [],
         statistics: result.statistics || {},
         timestamp: Date.now()
-      });
+      };
+      
+      console.log('Result object to add:', resultToAdd);
+      addResult(resultToAdd);
+      
+      // Log current results after adding
+      setTimeout(() => {
+        const currentResults = useAlgorithmResultsStore.getState().results;
+        console.log('Current algorithm results after adding:', currentResults);
+        console.log('Total results in store:', currentResults.length);
+      }, 100);
       
       setStatus('completed');
     } catch (err) {

@@ -45,13 +45,34 @@ export function Dashboard() {
         // Save result to the results store
         console.log('Saving result to the results store');
         console.log('Data:', data);
-        addResult({
-          id: generateId(),
-          algorithm: algorithmRef.current, // Use the ref instead of direct access
-          processes: data.results || [],
-          statistics: data.statistics || {},
-          timestamp: Date.now()
-        });
+        
+        try {
+          // Ensure we have valid data before saving
+          if (!data || !data.results || !data.statistics) {
+            console.error('Invalid data received from simulation:', data);
+            return;
+          }
+          
+          // Create a properly structured result object
+          const resultToAdd = {
+            id: generateId(),
+            algorithm: algorithmRef.current, // Use the ref instead of direct access
+            processes: Array.isArray(data.results) ? data.results : [],
+            statistics: data.statistics || {},
+            timestamp: Date.now()
+          };
+          
+          console.log('Adding algorithm result to store:', resultToAdd);
+          addResult(resultToAdd);
+          
+          // Log current state of results after adding
+          setTimeout(() => {
+            console.log('Current algorithm results after adding:', 
+              useAlgorithmResultsStore.getState().results);
+          }, 100);
+        } catch (error) {
+          console.error('Error saving simulation result:', error);
+        }
       },
       // On simulation error
       (err) => {
