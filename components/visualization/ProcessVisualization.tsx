@@ -1,129 +1,176 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
 import { useSimulationStore } from '@/lib/store/simulation-state';
-import { Process } from '@/lib/store/algorithm-results';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle, Clock, PlayCircle, PauseCircle, CheckCircle } from 'lucide-react';
 
-export function ProcessVisualization() {
+interface ProcessVisualizationProps {
+  showDetailedMetrics?: boolean;
+}
+
+export function ProcessVisualization({ showDetailedMetrics = true }: ProcessVisualizationProps) {
   const { simulation } = useSimulationStore();
-  const { processes, currentTime, status } = simulation;
+  const [cpuUtilization, setCpuUtilization] = useState(0);
   
-  // Group processes by state
-  const processesByState = processes.reduce((acc, process) => {
-    const state = process.state || 'new';
-    if (!acc[state]) {
-      acc[state] = [];
-    }
-    acc[state].push(process);
-    return acc;
-  }, {} as Record<string, Process[]>);
+  useEffect(() => {
+    // Calculate CPU utilization for the progress bar
+    const utilization = parseFloat(simulation.statistics.cpuUtilization || '0');
+    setCpuUtilization(isNaN(utilization) ? 0 : utilization);
+  }, [simulation.statistics.cpuUtilization]);
   
-  const getProgressValue = (process: Process) => {
-    if (!process.burstTime) return 0;
-    if (process.remainingTime === undefined) return 0;
-    
-    return ((process.burstTime - process.remainingTime) / process.burstTime) * 100;
-  };
+  // Get the CPU state (running a process or idle)
+  const cpuState = simulation.queues.runningProcess ? 'running' : 'idle';
   
-  const getStateColor = (state: string) => {
-    const colors: Record<string, string> = {
-      new: 'bg-blue-500',
-      ready: 'bg-yellow-500',
-      running: 'bg-green-500',
-      blocked: 'bg-red-500',
-      terminated: 'bg-gray-500',
-      waiting: 'bg-orange-500'
-    };
-    
-    return colors[state] || 'bg-gray-300';
-  };
-
-  const getStatusIcon = () => {
-    switch(status) {
-      case 'running':
-        return <PlayCircle className="h-5 w-5 text-green-500" />;
-      case 'paused':
-        return <PauseCircle className="h-5 w-5 text-yellow-500" />;
-      case 'completed':
-        return <CheckCircle className="h-5 w-5 text-blue-500" />;
-      default:
-        return <Clock className="h-5 w-5 text-gray-500" />;
-    }
-  };
+  // Get extra metrics from detailed data if available
+  const detailedMetrics = simulation.detailedMetrics || {};
   
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Process States</CardTitle>
-            <CardDescription>
-              Current simulation time: {currentTime}
-            </CardDescription>
+        <CardTitle>Process Visualization</CardTitle>
+        <CardDescription>
+          Real-time view of process states and simulation metrics
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* CPU Utilization */}
+        <div className="space-y-2">
+          <div className="flex justify-between items-center">
+            <h3 className="font-medium text-sm">CPU Utilization</h3>
+            <Badge variant={cpuUtilization > 70 ? 'default' : 'secondary'}>
+              {cpuUtilization.toFixed(2)}%
+            </Badge>
           </div>
-          <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-muted">
-            {getStatusIcon()}
-            <span className="text-sm font-medium capitalize">{status}</span>
+          <Progress value={cpuUtilization} className="h-2" />
+        </div>
+        
+        {/* Current Running Process */}
+        <div className="space-y-2">
+          <h3 className="font-medium text-sm">CPU State</h3>
+          <div className="bg-muted p-4 rounded-md">
+            {simulation.queues.runningProcess ? (
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">{simulation.queues.runningProcess.name}</span>
+                  <Badge variant="default">Running</Badge>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex justify-between text-xs">
+                    <span>Priority: {simulation.queues.runningProcess.priority}</span>
+                    <span>Remaining: {simulation.queues.runningProcess.remainingTime} units</span>
+                  </div>
+                  {simulation.queues.runningProcess.progress !== undefined && (
+                    <div className="w-full">
+                      <Progress 
+                        value={simulation.queues.runningProcess.progress} 
+                        className="h-1.5" 
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-2 text-muted-foreground">
+                CPU Idle
+              </div>
+            )}
           </div>
         </div>
-      </CardHeader>
-      <CardContent>
-        {processes.length === 0 ? (
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>No simulation data</AlertTitle>
-            <AlertDescription>
-              Start a simulation to see the process states and transitions.
-            </AlertDescription>
-          </Alert>
-        ) : (
-          <div className="space-y-6">
-            {['new', 'ready', 'running', 'blocked', 'waiting', 'terminated'].map((state) => (
-              <div key={state} className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className={`w-3 h-3 rounded-full ${getStateColor(state)}`} />
-                  <h3 className="text-sm font-medium capitalize">{state}</h3>
-                  <span className="text-xs text-muted-foreground">
-                    ({(processesByState[state] || []).length} processes)
-                  </span>
-                </div>
-                
-                {(processesByState[state] || []).length > 0 ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Arrival</TableHead>
-                        <TableHead>Burst</TableHead>
-                        <TableHead>Remaining</TableHead>
-                        <TableHead>Priority</TableHead>
-                        <TableHead>Progress</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {(processesByState[state] || []).map((process) => (
-                        <TableRow key={process.id}>
-                          <TableCell>{process.name}</TableCell>
-                          <TableCell>{process.arrivalTime}</TableCell>
-                          <TableCell>{process.burstTime}</TableCell>
-                          <TableCell>{process.remainingTime ?? '—'}</TableCell>
-                          <TableCell>{process.priority ?? '—'}</TableCell>
-                          <TableCell className="w-[100px]">
-                            <Progress value={getProgressValue(process)} className="h-2" />
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                ) : (
-                  <p className="text-sm text-muted-foreground">No processes in this state</p>
-                )}
+        
+        {/* Ready Queue */}
+        <div className="space-y-2">
+          <div className="flex justify-between items-center">
+            <h3 className="font-medium text-sm">Ready Queue</h3>
+            <Badge variant="outline">{simulation.queues.readyQueue.length} processes</Badge>
+          </div>
+          <div className="bg-muted p-3 rounded-md max-h-40 overflow-y-auto">
+            {simulation.queues.readyQueue.length > 0 ? (
+              <div className="space-y-2">
+                {simulation.queues.readyQueue.map((process, index) => (
+                  <div key={`${process.id}-${index}`} className="flex justify-between items-center bg-background p-2 rounded-sm text-xs">
+                    <span>{process.name}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">Burst: {process.remainingTime}</span>
+                      <span className="text-muted-foreground">Priority: {process.priority}</span>
+                      <span className="text-muted-foreground">Wait: {process.waitingTime}</span>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            ) : (
+              <div className="text-center py-2 text-muted-foreground text-xs">
+                No processes in ready queue
+              </div>
+            )}
+          </div>
+        </div>
+        
+        {/* Completed Processes */}
+        <div className="space-y-2">
+          <div className="flex justify-between items-center">
+            <h3 className="font-medium text-sm">Completed Processes</h3>
+            <Badge variant="outline">{simulation.queues.completedProcesses.length} processes</Badge>
+          </div>
+          <div className="bg-muted p-3 rounded-md max-h-40 overflow-y-auto">
+            {simulation.queues.completedProcesses.length > 0 ? (
+              <div className="space-y-2">
+                {simulation.queues.completedProcesses.map((process, index) => (
+                  <div key={`${process.id}-${index}`} className="flex justify-between items-center bg-background p-2 rounded-sm text-xs">
+                    <span>{process.name}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">Turnaround: {process.turnaroundTime}</span>
+                      <span className="text-muted-foreground">Wait: {process.waitingTime}</span>
+                      <span className="text-muted-foreground">Response: {process.responseTime}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-2 text-muted-foreground text-xs">
+                No completed processes yet
+              </div>
+            )}
+          </div>
+        </div>
+        
+        {/* Detailed Metrics */}
+        {showDetailedMetrics && (
+          <div className="space-y-2">
+            <h3 className="font-medium text-sm">Detailed Metrics</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              <div className="bg-muted p-3 rounded-md">
+                <div className="text-xs text-muted-foreground">Avg. Waiting Time</div>
+                <div className="text-lg font-mono">{simulation.statistics.avgWaitingTime || "0.00"}</div>
+              </div>
+              <div className="bg-muted p-3 rounded-md">
+                <div className="text-xs text-muted-foreground">Avg. Turnaround Time</div>
+                <div className="text-lg font-mono">{simulation.statistics.avgTurnaroundTime || "0.00"}</div>
+              </div>
+              <div className="bg-muted p-3 rounded-md">
+                <div className="text-xs text-muted-foreground">Avg. Response Time</div>
+                <div className="text-lg font-mono">{simulation.statistics.avgResponseTime || "0.00"}</div>
+              </div>
+              <div className="bg-muted p-3 rounded-md">
+                <div className="text-xs text-muted-foreground">Throughput</div>
+                <div className="text-lg font-mono">
+                  {simulation.statistics.throughput || "0.00"} proc/time
+                </div>
+              </div>
+              {detailedMetrics.contextSwitches !== undefined && (
+                <div className="bg-muted p-3 rounded-md">
+                  <div className="text-xs text-muted-foreground">Context Switches</div>
+                  <div className="text-lg font-mono">{detailedMetrics.contextSwitches}</div>
+                </div>
+              )}
+              {detailedMetrics.cpuIdlePercentage !== undefined && (
+                <div className="bg-muted p-3 rounded-md">
+                  <div className="text-xs text-muted-foreground">CPU Idle Time</div>
+                  <div className="text-lg font-mono">{detailedMetrics.cpuIdlePercentage}%</div>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </CardContent>

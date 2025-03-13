@@ -10,7 +10,7 @@ export const initializeSocket = (
   onSimulationStep: (data: any) => void,
   onSimulationCompleted: (data: any) => void,
   onSimulationError: (error: any) => void,
-  onSimulationState: (state: string) => void
+  onSimulationState: (state: string | { state: string; tickSpeed?: number }) => void
 ) => {
   if (socket) {
     console.log('Disconnecting existing socket');
@@ -100,6 +100,17 @@ export const resetSimulation = () => {
   }
   
   socket.emit('reset-simulation');
+};
+
+// Change the simulation tick speed
+export const changeTickSpeed = (stepInterval: number) => {
+  if (!socket) {
+    throw new Error('Socket not initialized');
+  }
+  
+  socket.emit('change-tick-speed', {
+    stepInterval
+  });
 };
 
 // Clean up the socket connection

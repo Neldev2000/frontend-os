@@ -4,7 +4,7 @@ import { Process } from './algorithm-results';
 // Queue structure for simulation
 export interface SimulationQueues {
   readyQueue: Process[];
-  runningProcess: Process | null;
+  runningProcess: (Process & { progress?: number }) | null;
   waitingQueue: Process[];
   completedProcesses: Process[];
 }
@@ -19,10 +19,21 @@ export interface SimulationState {
     avgWaitingTime: string;
     avgTurnaroundTime: string;
     avgResponseTime: string;
+    throughput?: string;
+  };
+  detailedMetrics?: {
+    contextSwitches?: number;
+    cpuIdleTime?: number;
+    cpuIdlePercentage?: string;
+    readyQueueLength?: number;
+    waitingQueueLength?: number;
+    algorithmType?: string;
+    tickSpeed?: number;
   };
   algorithm: string;
   algorithmConfig: {
     timeQuantum?: number;
+    showDetailedMetrics?: boolean;
   };
   status: 'idle' | 'running' | 'paused' | 'completed';
 }
@@ -52,8 +63,10 @@ const initialState: SimulationState = {
     cpuUtilization: '0.00',
     avgWaitingTime: '0.00',
     avgTurnaroundTime: '0.00',
-    avgResponseTime: '0.00'
+    avgResponseTime: '0.00',
+    throughput: '0.00'
   },
+  detailedMetrics: {},
   algorithm: 'FCFS',
   algorithmConfig: {},
   status: 'idle'
@@ -89,6 +102,18 @@ export const useSimulationStore = create<SimulationStateStore>()((set) => ({
   updateSimulationStep: (data) => set((prev) => {
     console.log('Received simulation step update:', data);
     
+    // Extract detailed metrics if they exist
+    const detailedMetrics = {} as any;
+    if (data.statistics) {
+      // Add detailed metrics if they exist
+      ['contextSwitches', 'cpuIdleTime', 'cpuIdlePercentage', 'readyQueueLength', 
+       'waitingQueueLength', 'algorithmType', 'tickSpeed'].forEach(key => {
+        if (data.statistics[key] !== undefined) {
+          detailedMetrics[key] = data.statistics[key];
+        }
+      });
+    }
+    
     return {
       simulation: {
         ...prev.simulation,
@@ -110,8 +135,13 @@ export const useSimulationStore = create<SimulationStateStore>()((set) => ({
           cpuUtilization: data.statistics?.cpuUtilization ?? prev.simulation.statistics.cpuUtilization,
           avgWaitingTime: data.statistics?.avgWaitingTime ?? prev.simulation.statistics.avgWaitingTime,
           avgTurnaroundTime: data.statistics?.avgTurnaroundTime ?? prev.simulation.statistics.avgTurnaroundTime,
-          avgResponseTime: data.statistics?.avgResponseTime ?? prev.simulation.statistics.avgResponseTime
-        }
+          avgResponseTime: data.statistics?.avgResponseTime ?? prev.simulation.statistics.avgResponseTime,
+          throughput: data.statistics?.throughput ?? prev.simulation.statistics.throughput
+        },
+        // Add detailed metrics if they exist
+        detailedMetrics: Object.keys(detailedMetrics).length > 0 
+          ? detailedMetrics 
+          : prev.simulation.detailedMetrics
       }
     };
   }),

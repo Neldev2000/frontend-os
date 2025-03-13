@@ -39,6 +39,7 @@ export interface ParameterInfo {
 // Simulation Config interface
 export interface SimulationConfig {
   timeQuantum?: number;
+  showDetailedMetrics?: boolean; // Whether to include detailed metrics in updates
 }
 
 // Fetch available algorithms

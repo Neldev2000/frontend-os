@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Slider } from '@/components/ui/slider';
 import { useSimulationStore } from '@/lib/store/simulation-state';
 import { useAlgorithmResultsStore } from '@/lib/store/algorithm-results';
 import { 
@@ -11,11 +12,23 @@ import {
   pauseSimulation, 
   resumeSimulation, 
   stepSimulation, 
-  resetSimulation, 
+  resetSimulation,
+  changeTickSpeed,
   cleanupSocket
 } from '@/lib/socket';
 import { runSimulation } from '@/lib/api';
 import { generateId } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
+import { 
+  Play, 
+  Pause, 
+  SkipForward, 
+  RefreshCw, 
+  FastForward, 
+  Rewind, 
+  RotateCcw,
+  Clock
+} from 'lucide-react';
 
 export function SimulationControls() {
   const [simSpeed, setSimSpeed] = useState<number>(1000); // ms per step
@@ -64,8 +77,16 @@ export function SimulationControls() {
         setStatus('idle');
       },
       // On simulation state change
-      (state) => {
-        setStatus(state as any);
+      (stateData) => {
+        if (typeof stateData === 'object' && 'state' in stateData) {
+          setStatus(stateData.state as any);
+          // If state includes tickSpeed, update the local simSpeed
+          if ('tickSpeed' in stateData && typeof stateData.tickSpeed === 'number') {
+            setSimSpeed(stateData.tickSpeed);
+          }
+        } else if (typeof stateData === 'string') {
+          setStatus(stateData as any);
+        }
       }
     );
     
@@ -139,7 +160,10 @@ export function SimulationControls() {
         simulation.algorithm,
         simulation.processes,
         simSpeed,
-        simulation.algorithmConfig
+        {
+          ...simulation.algorithmConfig,
+          showDetailedMetrics: true // Enable detailed metrics
+        }
       );
     } catch (err: any) {
       console.error('Error starting real-time simulation:', err);
@@ -147,10 +171,32 @@ export function SimulationControls() {
     }
   };
   
-  const handleSimSpeedChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseInt(e.target.value, 10);
-    if (!isNaN(value) && value > 0) {
-      setSimSpeed(value);
+  // Handle tick speed change from slider
+  const handleSimSpeedChange = (value: number[]) => {
+    const newSpeed = value[0];
+    setSimSpeed(newSpeed);
+    
+    // If simulation is running, update the tick speed in real-time
+    if (simulation.status === 'running' || simulation.status === 'paused') {
+      console.log('Changing tick speed to:', newSpeed);
+      changeTickSpeed(newSpeed);
+    }
+  };
+  
+  // Convenience functions to quickly adjust tick speed
+  const increaseSpeed = () => {
+    const newSpeed = Math.max(100, simSpeed - 200);
+    setSimSpeed(newSpeed);
+    if (simulation.status === 'running' || simulation.status === 'paused') {
+      changeTickSpeed(newSpeed);
+    }
+  };
+  
+  const decreaseSpeed = () => {
+    const newSpeed = Math.min(2000, simSpeed + 200);
+    setSimSpeed(newSpeed);
+    if (simulation.status === 'running' || simulation.status === 'paused') {
+      changeTickSpeed(newSpeed);
     }
   };
   
@@ -168,41 +214,72 @@ export function SimulationControls() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Simulation Controls</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <Clock className="h-5 w-5" />
+          Simulation Controls
+        </CardTitle>
         <CardDescription>
-          Control the simulation execution
+          Control the simulation execution and speed
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-6">
           <div className="space-y-2">
-            <label className="text-sm font-medium">
-              Simulation Speed (ms per step):
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium">
+                Simulation Speed:
+              </label>
+              <Badge variant="outline" className="font-mono">
+                {simSpeed}ms per step
+              </Badge>
+            </div>
             <div className="flex items-center gap-2">
-              <input
-                type="range"
+              <Button 
+                variant="outline" 
+                size="icon"
+                onClick={decreaseSpeed}
+                disabled={simSpeed >= 2000}
+                title="Slower"
+              >
+                <Rewind className="h-4 w-4" />
+              </Button>
+              
+              <Slider
+                value={[simSpeed]}
                 min={100}
                 max={2000}
-                step={100}
-                value={simSpeed}
-                onChange={handleSimSpeedChange}
-                className="w-full"
+                step={50}
+                onValueChange={handleSimSpeedChange}
+                className="flex-1"
               />
-              <span className="text-xs w-12 text-right">{simSpeed}ms</span>
+              
+              <Button 
+                variant="outline" 
+                size="icon"
+                onClick={increaseSpeed}
+                disabled={simSpeed <= 100}
+                title="Faster"
+              >
+                <FastForward className="h-4 w-4" />
+              </Button>
             </div>
           </div>
           
           {error && (
-            <p className="text-red-500 text-sm">{error}</p>
+            <p className="text-red-500 text-sm p-2 bg-red-50 rounded-md">{error}</p>
           )}
           
           <div className="flex flex-wrap gap-2">
             <Button 
               onClick={handleRunSimulation}
               disabled={loading || simulation.processes.length === 0}
+              className="flex items-center gap-1"
             >
-              {loading ? 'Running...' : 'Run Simulation'}
+              {loading ? 'Running...' : (
+                <>
+                  <Play className="h-4 w-4" /> Run Simulation
+                </>
+              )}
             </Button>
             
             <Button 
@@ -212,59 +289,79 @@ export function SimulationControls() {
                 simulation.status === 'running' || 
                 simulation.processes.length === 0
               }
+              className="flex items-center gap-1"
             >
-              Start Real-time
+              <Play className="h-4 w-4" /> Start Real-time
             </Button>
             
             <Button 
               variant="outline"
               onClick={pauseSimulation}
               disabled={simulation.status !== 'running'}
+              className="flex items-center gap-1"
             >
-              Pause
+              <Pause className="h-4 w-4" /> Pause
             </Button>
             
             <Button 
               variant="outline"
               onClick={resumeSimulation}
               disabled={simulation.status !== 'paused'}
+              className="flex items-center gap-1"
             >
-              Resume
+              <Play className="h-4 w-4" /> Resume
             </Button>
             
             <Button 
               variant="outline"
               onClick={stepSimulation}
               disabled={simulation.status !== 'paused'}
+              className="flex items-center gap-1"
             >
-              Step
+              <SkipForward className="h-4 w-4" /> Step
             </Button>
             
             <Button 
               variant="destructive"
               onClick={handleReset}
               disabled={simulation.status === 'running'}
+              className="flex items-center gap-1"
             >
-              Reset
+              <RotateCcw className="h-4 w-4" /> Reset
             </Button>
           </div>
           
           <div className="bg-muted p-3 rounded-md">
-            <p className="text-sm font-medium">Current Status</p>
-            <p className="text-xs capitalize">{simulation.status}</p>
-            
-            <p className="text-sm font-medium mt-2">Selected Algorithm</p>
-            <p className="text-xs">{simulation.algorithm}</p>
-            
-            {simulation.algorithmConfig.timeQuantum && (
-              <>
-                <p className="text-sm font-medium mt-2">Time Quantum</p>
-                <p className="text-xs">{simulation.algorithmConfig.timeQuantum}</p>
-              </>
-            )}
-            
-            <p className="text-sm font-medium mt-2">Processes</p>
-            <p className="text-xs">{simulation.processes.length} configured</p>
+            <div className="flex flex-wrap gap-x-6 gap-y-2">
+              <div>
+                <p className="text-sm font-medium">Status</p>
+                <Badge variant={simulation.status === 'running' ? 'default' : 'secondary'} className="mt-1 capitalize">
+                  {simulation.status}
+                </Badge>
+              </div>
+              
+              <div>
+                <p className="text-sm font-medium">Algorithm</p>
+                <p className="text-sm font-mono">{simulation.algorithm}</p>
+              </div>
+              
+              {simulation.algorithmConfig?.timeQuantum && (
+                <div>
+                  <p className="text-sm font-medium">Time Quantum</p>
+                  <p className="text-sm font-mono">{simulation.algorithmConfig.timeQuantum}</p>
+                </div>
+              )}
+              
+              <div>
+                <p className="text-sm font-medium">Processes</p>
+                <p className="text-sm font-mono">{simulation.processes.length} configured</p>
+              </div>
+              
+              <div>
+                <p className="text-sm font-medium">Current Time</p>
+                <p className="text-sm font-mono">{simulation.currentTime || 0}</p>
+              </div>
+            </div>
           </div>
         </div>
       </CardContent>
