@@ -116,11 +116,11 @@ export function ProcessGenerator() {
     if (typeof value === 'string' && numericFields.includes(field)) {
       const numValue = parseFloat(value);
       if (!isNaN(numValue)) {
-        // @ts-ignore (we know this is safe due to the numericFields check)
+        // @ts-expect-error (we know this is safe due to the numericFields check)
         updatedProcesses[index][field] = numValue;
       }
     } else {
-      // @ts-ignore (we know this is safe due to the runtime check)
+      // @ts-expect-error (we know this is safe due to the runtime check)
       updatedProcesses[index][field] = value;
     }
     

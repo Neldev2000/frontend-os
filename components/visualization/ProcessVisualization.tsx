@@ -19,10 +19,7 @@ export function ProcessVisualization({ showDetailedMetrics = true }: ProcessVisu
     const utilization = parseFloat(simulation.statistics.cpuUtilization || '0');
     setCpuUtilization(isNaN(utilization) ? 0 : utilization);
   }, [simulation.statistics.cpuUtilization]);
-  
-  // Get the CPU state (running a process or idle)
-  const cpuState = simulation.queues.runningProcess ? 'running' : 'idle';
-  
+ 
   // Get extra metrics from detailed data if available
   const detailedMetrics = simulation.detailedMetrics || {};
   

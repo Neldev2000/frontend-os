@@ -33,7 +33,7 @@ export function Dashboard() {
   useEffect(() => {
     console.log('Initializing socket connection from Dashboard');
     
-    const socket = initializeSocket(
+    initializeSocket(
       // On simulation step
       (data) => {
         updateSimulationStep(data);
@@ -57,8 +57,23 @@ export function Dashboard() {
           const resultToAdd = {
             id: generateId(),
             algorithm: algorithmRef.current, // Use the ref instead of direct access
-            processes: Array.isArray(data.results) ? data.results : [],
-            statistics: data.statistics || {},
+            processes: Array.isArray(data.results) 
+              ? data.results.map(p => ({
+                  ...p,
+                  id: p.id || `process-${Math.random().toString(36).substring(2, 9)}`
+                }))
+              : [],
+            statistics: {
+              totalProcesses: Number(data.statistics?.totalProcesses || 0),
+              totalTime: Number(data.statistics?.totalTime || 0),
+              cpuUtilization: data.statistics?.cpuUtilization?.toString() || '0',
+              avgWaitingTime: data.statistics?.avgWaitingTime?.toString() || '0',
+              avgTurnaroundTime: data.statistics?.avgTurnaroundTime?.toString() || '0',
+              avgResponseTime: data.statistics?.avgResponseTime?.toString() || '0',
+              throughput: data.statistics?.throughput?.toString() || '0',
+              contextSwitches: Number(data.statistics?.contextSwitches || 0),
+              avgArrivalsPerStep: data.statistics?.avgArrivalsPerStep?.toString() || '0'
+            },
             timestamp: Date.now()
           };
           
@@ -82,11 +97,11 @@ export function Dashboard() {
       // On simulation state change
       (stateData) => {
         if (typeof stateData === 'object' && 'state' in stateData) {
-          setStatus(stateData.state as any);
+          setStatus(stateData.state as 'idle' | 'running' | 'paused' | 'completed');
           // If state includes tickSpeed, update tickSpeed in simulation store
           // (SimulationControls will read this from the store)
         } else if (typeof stateData === 'string') {
-          setStatus(stateData as any);
+          setStatus(stateData as 'idle' | 'running' | 'paused' | 'completed');
         }
       }
     );
@@ -97,7 +112,7 @@ export function Dashboard() {
       console.log('Cleaning up socket connection from Dashboard');
       cleanupSocket();
     };
-  }, []); // Empty dependency array - only run once
+  }, [updateSimulationStep, setStatus, addResult]); // Added missing dependencies
 
   // Switch to simulation tab when simulation is running or paused
   useEffect(() => {

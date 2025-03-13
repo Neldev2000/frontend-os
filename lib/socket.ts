@@ -5,11 +5,29 @@ const API_URL = 'http://localhost:8000';
 
 let socket: Socket | null = null;
 
+// Define the types for our socket data
+export interface SimulationStepData {
+  currentTime: number;
+  processes?: Process[];
+  queues?: {
+    readyQueue?: Process[];
+    runningProcess?: Process | null;
+    waitingQueue?: Process[];
+    completedProcesses?: Process[];
+  };
+  statistics?: Record<string, string | number>;
+}
+
+export interface SimulationCompletedData {
+  results: Process[];
+  statistics: Record<string, string | number>;
+}
+
 // Initialize socket connection
 export const initializeSocket = (
-  onSimulationStep: (data: any) => void,
-  onSimulationCompleted: (data: any) => void,
-  onSimulationError: (error: any) => void,
+  onSimulationStep: (data: SimulationStepData) => void,
+  onSimulationCompleted: (data: SimulationCompletedData) => void,
+  onSimulationError: (error: Error | { message: string }) => void,
   onSimulationState: (state: string | { state: string; tickSpeed?: number }) => void
 ) => {
   if (socket) {

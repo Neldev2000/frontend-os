@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { Process } from './algorithm-results';
+import { SimulationStepData } from '../socket';
 
 // Queue structure for simulation
 export interface SimulationQueues {
@@ -45,7 +46,7 @@ interface SimulationStateStore {
   resetSimulation: () => void;
   setAlgorithm: (algorithm: string, config?: { timeQuantum?: number }) => void;
   setProcesses: (processes: Process[]) => void;
-  updateSimulationStep: (data: any) => void;
+  updateSimulationStep: (data: SimulationStepData) => void;
   setStatus: (status: 'idle' | 'running' | 'paused' | 'completed') => void;
 }
 
@@ -103,40 +104,62 @@ export const useSimulationStore = create<SimulationStateStore>()((set) => ({
     console.log('Received simulation step update:', data);
     
     // Extract detailed metrics if they exist
-    const detailedMetrics = {} as any;
+    const detailedMetrics: Record<string, string | number> = {};
     if (data.statistics) {
       // Add detailed metrics if they exist
       ['contextSwitches', 'cpuIdleTime', 'cpuIdlePercentage', 'readyQueueLength', 
        'waitingQueueLength', 'algorithmType', 'tickSpeed'].forEach(key => {
-        if (data.statistics[key] !== undefined) {
+        if (data.statistics && data.statistics[key] !== undefined) {
           detailedMetrics[key] = data.statistics[key];
         }
       });
     }
     
+    // Ensure all processes have an id (convert undefined to empty string if needed)
+    const safeProcesses = Array.isArray(data.processes) 
+      ? data.processes.map(p => ({
+          ...p,
+          id: p.id || `process-${Math.random().toString(36).substring(2, 9)}`
+        }))
+      : prev.simulation.processes;
+    
+    // Similarly ensure all processes in queues have an id
+    const safeReadyQueue = data.queues?.readyQueue 
+      ? data.queues.readyQueue.map(p => ({...p, id: p.id || `process-${Math.random().toString(36).substring(2, 9)}`}))
+      : prev.simulation.queues.readyQueue;
+    
+    const safeWaitingQueue = Array.isArray(data.queues?.waitingQueue) 
+      ? data.queues.waitingQueue.map(p => ({...p, id: p.id || `process-${Math.random().toString(36).substring(2, 9)}`}))
+      : prev.simulation.queues.waitingQueue;
+    
+    const safeCompletedProcesses = Array.isArray(data.queues?.completedProcesses) 
+      ? data.queues.completedProcesses.map(p => ({...p, id: p.id || `process-${Math.random().toString(36).substring(2, 9)}`}))
+      : prev.simulation.queues.completedProcesses;
+    
+    // Handle running process if present
+    const safeRunningProcess = data.queues?.runningProcess 
+      ? {...data.queues.runningProcess, id: data.queues.runningProcess.id || `process-${Math.random().toString(36).substring(2, 9)}`}
+      : prev.simulation.queues.runningProcess;
+    
     return {
       simulation: {
         ...prev.simulation,
         currentTime: data.currentTime ?? prev.simulation.currentTime,
-        processes: Array.isArray(data.processes) ? data.processes : prev.simulation.processes,
+        processes: safeProcesses,
         queues: {
           ...prev.simulation.queues,
-          readyQueue: data.queues?.readyQueue ?? prev.simulation.queues.readyQueue,
-          runningProcess: data.queues?.runningProcess ?? prev.simulation.queues.runningProcess,
-          waitingQueue: Array.isArray(data.queues?.waitingQueue) 
-            ? data.queues.waitingQueue 
-            : prev.simulation.queues.waitingQueue,
-          completedProcesses: Array.isArray(data.queues?.completedProcesses) 
-            ? data.queues.completedProcesses 
-            : prev.simulation.queues.completedProcesses
+          readyQueue: safeReadyQueue,
+          runningProcess: safeRunningProcess,
+          waitingQueue: safeWaitingQueue,
+          completedProcesses: safeCompletedProcesses
         },
         statistics: {
           ...prev.simulation.statistics,
-          cpuUtilization: data.statistics?.cpuUtilization ?? prev.simulation.statistics.cpuUtilization,
-          avgWaitingTime: data.statistics?.avgWaitingTime ?? prev.simulation.statistics.avgWaitingTime,
-          avgTurnaroundTime: data.statistics?.avgTurnaroundTime ?? prev.simulation.statistics.avgTurnaroundTime,
-          avgResponseTime: data.statistics?.avgResponseTime ?? prev.simulation.statistics.avgResponseTime,
-          throughput: data.statistics?.throughput ?? prev.simulation.statistics.throughput
+          cpuUtilization: data.statistics?.cpuUtilization?.toString() ?? prev.simulation.statistics.cpuUtilization,
+          avgWaitingTime: data.statistics?.avgWaitingTime?.toString() ?? prev.simulation.statistics.avgWaitingTime,
+          avgTurnaroundTime: data.statistics?.avgTurnaroundTime?.toString() ?? prev.simulation.statistics.avgTurnaroundTime,
+          avgResponseTime: data.statistics?.avgResponseTime?.toString() ?? prev.simulation.statistics.avgResponseTime,
+          throughput: data.statistics?.throughput?.toString() ?? prev.simulation.statistics.throughput
         },
         // Add detailed metrics if they exist
         detailedMetrics: Object.keys(detailedMetrics).length > 0 

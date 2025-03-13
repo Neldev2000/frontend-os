@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
@@ -21,7 +21,6 @@ import {
   Play, 
   Pause, 
   SkipForward, 
-  RefreshCw, 
   FastForward, 
   Rewind, 
   RotateCcw,
@@ -131,9 +130,10 @@ export function SimulationControls({ socketInitialized }: SimulationControlsProp
           showDetailedMetrics: true // Enable detailed metrics
         }
       );
-    } catch (err: any) {
+    } catch (err: Error | unknown) {
       console.error('Error starting real-time simulation:', err);
-      setError(err?.message || 'Failed to start real-time simulation. Please try again.');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to start real-time simulation. Please try again.';
+      setError(errorMessage);
     }
   };
   

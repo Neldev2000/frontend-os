@@ -26,7 +26,7 @@ export interface AlgorithmDescription {
     name: string;
     description: string;
     type: string;
-    defaultValue?: any;
+    defaultValue?: string | number | boolean | null;
   }[];
 }
 
@@ -172,4 +172,16 @@ export const runSimulation = async (
     
     throw error;
   }
-}; 
+};
+
+export async function fetchData<T>(url: string, options?: RequestInit): Promise<T> {
+  const response = await fetch(`${API_URL}${url}`, options);
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Server responded with error:', response.status, errorText);
+    throw new Error(`Server error: ${response.status} - ${errorText || 'No details provided'}`);
+  }
+  
+  return response.json() as Promise<T>;
+} 

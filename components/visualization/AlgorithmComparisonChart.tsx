@@ -1,44 +1,12 @@
 'use client';
 
-import { useMemo, useEffect, useState } from 'react';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  Radar,
-  LineChart,
-  Line,
-  ScatterChart, 
-  Scatter,
-  ZAxis,
-  Cell,
-  ReferenceArea,
-  ReferenceLine,
-  Treemap,
-  ComposedChart,
-  Area
-} from 'recharts';
+import { useMemo, useEffect } from 'react';
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAlgorithmResultsStore } from '@/lib/store/algorithm-results';
-import { prepareComparisonData, generateRandomColor, getAlgorithmFullName } from '@/lib/utils';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { getAlgorithmFullName } from '@/lib/utils';
+
 
 interface AlgorithmComparisonChartProps {
   metrics?: Array<{
@@ -48,6 +16,15 @@ interface AlgorithmComparisonChartProps {
     description?: string;
   }>;
 }
+
+// Add a type definition for chart data items
+type ChartDataItem = Record<string, string | number>;
+
+// Type definition for metric values
+type MetricValue = {
+  algorithm: string;
+  value: number;
+};
 
 export function AlgorithmComparisonChart({
   metrics = [
@@ -60,10 +37,6 @@ export function AlgorithmComparisonChart({
 }: AlgorithmComparisonChartProps) {
   const results = useAlgorithmResultsStore(state => state.results);
   const clearResults = useAlgorithmResultsStore(state => state.clearResults);
-  const [chartType, setChartType] = useState<'bar' | 'radar' | 'line' | 'scatter' | 'composed' | 'heatmap'>('bar');
-  const [primaryMetric, setPrimaryMetric] = useState<string>(metrics[0].key);
-  const [secondaryMetric, setSecondaryMetric] = useState<string>(metrics[1].key);
-  const [showInsights, setShowInsights] = useState<boolean>(true);
   
   // Enhanced debugging for results data
   useEffect(() => {
@@ -72,8 +45,7 @@ export function AlgorithmComparisonChart({
     if (results.length > 0) {
       console.log('First result sample:', results[0]);
       
-      // Force a re-render when results change
-      setChartType(prev => prev === 'bar' ? 'bar' : 'bar');
+    
     }
   }, [results]);
   
@@ -88,11 +60,8 @@ export function AlgorithmComparisonChart({
     // this might indicate a subscription issue
     if (results.length === 0 && storeResults.length > 0) {
       console.warn('Component shows no results but the store has results. Forcing update.');
-      
-      // Force a re-render
-      setChartType(prev => prev === 'bar' ? 'bar' : 'bar');
     }
-  }, []);
+  }, [results.length]);
   
   // Process data in a way that works better for our chart types
   const chartData = useMemo(() => {
@@ -103,15 +72,15 @@ export function AlgorithmComparisonChart({
     
     console.log('Processing chart data from', results.length, 'results');
     
-    // For bar chart - each algorithm is an entry with all metrics
-    const processedData = results.map(result => {
+    return results.map(result => {
       if (!result || !result.statistics) {
         console.warn('Invalid result found:', result);
         return null;
       }
       
-      // Parse numerical values from strings
+      // Convert values to numbers for charting
       return {
+        id: result.id,
         algorithm: result.algorithm,
         algorithmName: getAlgorithmFullName(result.algorithm),
         cpuUtilization: parseFloat(result.statistics.cpuUtilization || '0'),
@@ -119,12 +88,8 @@ export function AlgorithmComparisonChart({
         avgTurnaroundTime: parseFloat(result.statistics.avgTurnaroundTime || '0'),
         avgResponseTime: parseFloat(result.statistics.avgResponseTime || '0'),
         throughput: parseFloat(result.statistics.throughput || '0') * 100, // Scale throughput for visibility
-        timestamp: result.timestamp,
-      };
-    }).filter(Boolean);
-    
-    console.log('Processed chart data:', processedData);
-    return processedData;
+      } as ChartDataItem;
+    }).filter((item): item is ChartDataItem => item !== null);
   }, [results]);
   
   // Generate colors for each metric or algorithm
@@ -142,6 +107,8 @@ export function AlgorithmComparisonChart({
   }, []);
   
   // Prepare data with standardized/z-score normalized values for better comparisons
+  // This is not currently used but will be needed for future enhancements
+  /* 
   const normalizedData = useMemo(() => {
     if (chartData.length === 0) return [];
     
@@ -150,7 +117,7 @@ export function AlgorithmComparisonChart({
     const stdDevs: Record<string, number> = {};
     
     metrics.forEach(metric => {
-      const values = chartData.map(item => (item as any)[metric.key] || 0);
+      const values = chartData.map(item => (item as Record<string, number>)[metric.key] || 0);
       const sum = values.reduce((acc, val) => acc + val, 0);
       const mean = sum / values.length;
       means[metric.key] = mean;
@@ -171,13 +138,13 @@ export function AlgorithmComparisonChart({
     return chartData.map(item => {
       if (!item) return null;
       
-      const normalized: Record<string, any> = {
+      const normalized: Record<string, string | number> = {
         algorithm: item.algorithm,
         algorithmName: item.algorithmName
       };
       
       metrics.forEach(metric => {
-        const value = (item as any)[metric.key] || 0;
+        const value = (item as Record<string, number>)[metric.key] || 0;
         normalized[metric.key] = (value - means[metric.key]) / stdDevs[metric.key];
         // Also keep the original value
         normalized[`${metric.key}Original`] = value;
@@ -186,9 +153,11 @@ export function AlgorithmComparisonChart({
       return normalized;
     }).filter(Boolean);
   }, [chartData, metrics]);
+  */
   
   // For radar chart, we need values between 0-100
-  const radarData = useMemo(() => {
+  // Commenting out unused radarData for now - will implement later
+  /*const radarData = useMemo(() => {
     if (normalizedData.length === 0) return [];
     
     // Map normalized values to 0-100 scale
@@ -196,32 +165,22 @@ export function AlgorithmComparisonChart({
       if (!item) return null;
       
       const scaled: Record<string, any> = {
-        algorithm: item.algorithm,
-        algorithmName: item.algorithmName
+      // implementation goes here
       };
-      
-      metrics.forEach(metric => {
-        // Convert z-scores to 0-100 scale (generally z-scores between -3 and 3)
-        // Map range [-3, 3] to [0, 100]
-        const zScore = item[metric.key];
-        const scaledValue = Math.max(0, Math.min(100, ((zScore + 3) / 6) * 100));
-        scaled[metric.key] = scaledValue;
-      });
-      
       return scaled;
-    }).filter(Boolean);
-  }, [normalizedData, metrics]);
+    });
+  }, [normalizedData, metrics]);*/
   
   // Calculate insights based on the data
   const insights = useMemo(() => {
     if (chartData.length < 2) return null;
     
     // Find the best algorithm for each metric
-    const bestAlgorithms: Record<string, { algorithm: string, value: number }> = {};
+    const bestAlgorithms: Record<string, MetricValue> = {};
     
     metrics.forEach(metric => {
       let bestAlgo = chartData[0];
-      let bestValue = (chartData[0] as any)[metric.key];
+      let bestValue = (chartData[0] as Record<string, number>)[metric.key];
       
       // For waiting time, turnaround time, and response time, lower is better
       // For CPU utilization and throughput, higher is better
@@ -230,7 +189,7 @@ export function AlgorithmComparisonChart({
       chartData.forEach(algo => {
         if (!algo) return;
         
-        const value = (algo as any)[metric.key];
+        const value = (algo as Record<string, number>)[metric.key];
         if (isLowerBetter) {
           if (value < bestValue) {
             bestValue = value;
@@ -247,7 +206,7 @@ export function AlgorithmComparisonChart({
       if (!bestAlgo) return;
       
       bestAlgorithms[metric.key] = {
-        algorithm: bestAlgo.algorithmName,
+        algorithm: String(bestAlgo.algorithmName),
         value: bestValue
       };
     });
@@ -259,13 +218,14 @@ export function AlgorithmComparisonChart({
       let score = 0;
       
       metrics.forEach(metric => {
-        const value = (algo as any)[metric.key];
+        const value = (algo as Record<string, number>)[metric.key];
         const isLowerBetter = ['avgWaitingTime', 'avgTurnaroundTime', 'avgResponseTime'].includes(metric.key);
         
         // Normalize the value (0 to 1 scale)
-        const allValues = chartData.map(a => (a as any)[metric.key]);
-        const minValue = Math.min(...allValues);
-        const maxValue = Math.max(...allValues);
+        const allValues = chartData.map(a => (a as Record<string, number>)[metric.key]);
+        const numericValues = allValues.map(v => typeof v === 'string' ? parseFloat(v) || 0 : Number(v));
+        const minValue = Math.min(...numericValues);
+        const maxValue = Math.max(...numericValues);
         const range = maxValue - minValue;
         
         // Avoid division by zero
@@ -301,12 +261,51 @@ export function AlgorithmComparisonChart({
   }, [chartData, metrics]);
   
   // Formatter function for handling different value types
-  const formatValue = (value: any, unit: string = '') => {
+  const formatValue = (value: string | number, unit: string = '') => {
     if (typeof value === 'number') {
       return `${value.toFixed(2)}${unit}`;
     }
     return `${value}${unit}`;
   };
+  
+  // Function to get record by metric key with proper type handling
+  // This is not currently used but will be needed for future enhancements
+  /*
+  const getMetricValue = (item: Record<string, string | number>, key: string): number => {
+    const value = item[key];
+    if (typeof value === 'string') {
+      return parseFloat(value) || 0;
+    }
+    return typeof value === 'number' ? value : 0;
+  };
+  */
+
+  // Find highest/lowest value for a metric across all algorithms
+  // This is not currently used but will be needed for future enhancements
+  /*
+  const findExtremeByMetric = (chartData: Record<string, string | number>[], metric: string, findMax: boolean): MetricValue => {
+    if (!chartData || chartData.length === 0) {
+      return { algorithm: 'None', value: 0 };
+    }
+
+    let extremeValue = findMax ? -Infinity : Infinity;
+    let extremeAlgorithm = '';
+
+    chartData.forEach(item => {
+      const value = getMetricValue(item, metric);
+      
+      if ((findMax && value > extremeValue) || (!findMax && value < extremeValue)) {
+        extremeValue = value;
+        extremeAlgorithm = item.algorithm?.toString() || '';
+      }
+    });
+
+    return {
+      algorithm: extremeAlgorithm,
+      value: extremeValue
+    };
+  };
+  */
   
   if (chartData.length === 0) {
     return (
@@ -323,7 +322,7 @@ export function AlgorithmComparisonChart({
           </p>
           <div className="space-y-2">
             <p className="text-sm text-center">
-              Once you run simulations with different algorithms, you'll see performance metrics compared here.
+              Once you run simulations with different algorithms, you&apos;ll see performance metrics compared here.
             </p>
             <ul className="text-sm list-disc pl-5 space-y-1 mt-2">
               {metrics.map(metric => (
@@ -361,7 +360,7 @@ export function AlgorithmComparisonChart({
             variant="outline" 
             size="sm"
             onClick={() => {
-              if (confirm('Are you sure you want to clear all comparison data?')) {
+              if (confirm("Are you sure you want to clear all comparison data?")) {
                 clearResults();
               }
             }}
@@ -399,19 +398,21 @@ export function AlgorithmComparisonChart({
                 
                 <ul className="space-y-2">
                   {metrics.map((metric) => {
-                    const value = (result as any)[metric.key];
-                    const allValues = chartData.map(r => (r as any)[metric.key]);
-                    const maxValue = Math.max(...allValues);
-                    const minValue = Math.min(...allValues);
+                    const value = (result as Record<string, number | string>)[metric.key];
+                    const allValues = chartData.map(r => (r as Record<string, number | string>)[metric.key]);
+                    const numericValues = allValues.map(v => typeof v === 'string' ? parseFloat(v) || 0 : Number(v));
+                    const maxValue = Math.max(...numericValues);
+                    const minValue = Math.min(...numericValues);
                     const range = maxValue - minValue;
                     
                     // For metrics where lower is better, we invert the percentage
                     const isLowerBetter = ['avgWaitingTime', 'avgTurnaroundTime', 'avgResponseTime'].includes(metric.key);
+                    const numericValue = typeof value === 'string' ? parseFloat(value) || 0 : Number(value);
                     const percentage = range === 0 
                       ? 50 // If all algorithms have the same value
                       : isLowerBetter
-                        ? 100 - ((value - minValue) / range * 100)
-                        : ((value - minValue) / range * 100);
+                        ? 100 - ((numericValue - minValue) / range * 100)
+                        : ((numericValue - minValue) / range * 100);
                     
                     // Determine color based on percentage (green for good, red for bad)
                     const barColor = isLowerBetter

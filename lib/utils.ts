@@ -32,6 +32,15 @@ export const generateRandomColor = (): string => {
 export const prepareComparisonData = (results: AlgorithmResult[]) => {
   if (!results || !Array.isArray(results) || results.length === 0) return [];
   
+  type ComparisonDataItem = {
+    algorithm: string;
+    cpuUtilization: number;
+    avgWaitingTime: number;
+    avgTurnaroundTime: number;
+    avgResponseTime: number;
+    throughput: number;
+  };
+  
   try {
     // Extract algorithm names and statistics
     return results.map(result => {
@@ -48,7 +57,7 @@ export const prepareComparisonData = (results: AlgorithmResult[]) => {
         avgResponseTime: parseFloat(result.statistics.avgResponseTime || '0'),
         throughput: parseFloat(result.statistics.throughput || '0')
       };
-    }).filter(item => item !== null) as any[]; // Filter out null items
+    }).filter(item => item !== null) as ComparisonDataItem[]; // Filter out null items
   } catch (error) {
     console.error('Error preparing comparison data:', error);
     return [];
